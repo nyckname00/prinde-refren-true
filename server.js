@@ -13,6 +13,26 @@ const PORT = process.env.PORT || 3000;
 const cache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 ore
 
+function normalize(str){
+  return str
+    .toLowerCase()
+    .replace(/ă/g,'a').replace(/â/g,'a').replace(/î/g,'i')
+    .replace(/ș/g,'s').replace(/ş/g,'s').replace(/ț/g,'t').replace(/ţ/g,'t')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// iTunes intoarce uneori piese complet nelegate (mai ales pentru nume scurte
+// sau cuvinte comune, ex: "Sore", "JO", "Ruby"). Acceptam un rezultat doar
+// daca numele artistului intors chiar incepe cu numele cautat.
+function matchesArtist(queried, returned){
+  const q = normalize(queried);
+  const r = normalize(returned);
+  return r === q || r.startsWith(q + ' ');
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/search', async (req, res) => {
@@ -27,7 +47,7 @@ app.get('/api/search', async (req, res) => {
     return res.json(cached.data);
   }
 
-  const url = 'https://itunes.apple.com/search?media=music&entity=song&country=RO&limit=10&term=' +
+  const url = 'https://itunes.apple.com/search?media=music&entity=song&country=RO&limit=15&term=' +
     encodeURIComponent(artist);
 
   try {
@@ -39,6 +59,7 @@ app.get('/api/search', async (req, res) => {
 
     const tracks = (data.results || [])
       .filter(t => t.previewUrl && t.trackName && t.artistName)
+      .filter(t => matchesArtist(artist, t.artistName))
       .map(t => ({
         id: t.trackId,
         title: t.trackName,
@@ -58,3 +79,4 @@ app.get('/api/search', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Refren ruleaza pe portul ${PORT}`);
 });
+

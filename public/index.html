@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Refren — ghici piesa românească</title>
+<title>Prinde Refren — ghici piesa românească</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -30,6 +30,13 @@
     color:var(--text);
     font-family:'Work Sans', sans-serif;
   }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+  }
+  @keyframes riseIn{
+    from{ opacity:0; transform:translateY(14px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
   .wrap{
     max-width:560px;
     margin:0 auto;
@@ -38,13 +45,15 @@
   header{
     display:flex; align-items:baseline; justify-content:space-between;
     margin-bottom:22px;
+    animation: riseIn 0.5s ease both;
   }
   .logo{
     font-family:'Instrument Serif', serif;
-    font-size:34px;
+    font-size:28px;
     font-style:italic;
     color:var(--gold);
-    letter-spacing:0.5px;
+    letter-spacing:0.3px;
+    white-space:nowrap;
   }
   .stats{
     text-align:right;
@@ -52,7 +61,17 @@
     color:var(--text-muted);
     line-height:1.5;
   }
-  .stats b{ color:var(--text); font-size:16px; font-weight:600; }
+  .stats b{
+    color:var(--text); font-size:16px; font-weight:600;
+    display:inline-block;
+    transition: transform 0.25s ease;
+  }
+  .stats b.pulse{ animation: scorePulse 0.5s ease; }
+  @keyframes scorePulse{
+    0%{ transform:scale(1); color:var(--text); }
+    35%{ transform:scale(1.35); color:var(--green); }
+    100%{ transform:scale(1); color:var(--text); }
+  }
 
   .card{
     background:linear-gradient(180deg, var(--panel), var(--panel-2));
@@ -61,6 +80,7 @@
     padding:28px 24px 24px;
     position:relative;
     overflow:hidden;
+    animation: riseIn 0.55s ease 0.08s both;
   }
   .card::before{
     content:"";
@@ -97,6 +117,31 @@
   }
   @keyframes spin{ to{ transform: rotate(360deg); } }
 
+  .tonearm{
+    position:absolute;
+    top:-6px; right:-4px;
+    width:54px; height:54px;
+    transform-origin: 88% 12%;
+    transform: rotate(-32deg);
+    transition: transform 0.35s cubic-bezier(.34,1.4,.64,1);
+    pointer-events:none;
+  }
+  .tonearm.down{ transform: rotate(-6deg); }
+  .tonearm::before{
+    content:"";
+    position:absolute; top:8px; right:8px;
+    width:5px; height:38px; border-radius:3px;
+    background: linear-gradient(var(--gold-dim), #7a5c22);
+    transform-origin: top center;
+  }
+  .tonearm::after{
+    content:"";
+    position:absolute; top:0; right:2px;
+    width:14px; height:14px; border-radius:50%;
+    background: var(--gold-dim);
+    border:2px solid var(--bg);
+  }
+
   .play-col{ flex:1; min-width:0; }
   .play-btn{
     display:flex; align-items:center; gap:10px;
@@ -130,6 +175,7 @@
     background: rgba(245,241,232,0.06);
     border-right:1px solid var(--bg);
     position:relative;
+    transition: background 0.3s ease;
   }
   .seg:last-child{ border-right:none; }
   .seg.done{ background: rgba(231,169,60,0.35); }
@@ -205,7 +251,11 @@
     font-size:14px;
     display:none;
   }
-  .feedback.show{ display:flex; gap:12px; align-items:center; }
+  .feedback.show{ display:flex; gap:12px; align-items:center; animation: popIn 0.35s cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes popIn{
+    from{ opacity:0; transform: scale(0.92) translateY(4px); }
+    to{ opacity:1; transform: scale(1) translateY(0); }
+  }
   .feedback.correct{ background:rgba(111,171,108,0.15); border:1px solid rgba(111,171,108,0.4); }
   .feedback.wrong{ background:rgba(198,72,58,0.12); border:1px solid rgba(198,72,58,0.35); }
   .feedback img{ width:44px; height:44px; border-radius:8px; object-fit:cover; flex:none; }
@@ -249,7 +299,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">Refren</div>
+    <div class="logo">Prinde Refren</div>
     <div class="stats">
       <div>Scor <b id="scoreVal">0</b></div>
       <div id="roundVal">Runda 1</div>
@@ -266,11 +316,12 @@
       <div class="stage-area">
         <div class="vinyl-holder">
           <div class="vinyl" id="vinyl"><div class="label"></div></div>
+          <div class="tonearm" id="tonearm"></div>
         </div>
         <div class="play-col">
-          <button class="play-btn" id="playBtn">
+          <button class="play-btn" id="playBtn" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            Redă clipul
+            <span id="playBtnLabel">Se încarcă…</span>
           </button>
           <div class="stage-note">Etapă <b id="stageLabel">0.1s</b> · valorează <b id="stagePoints">1000</b> puncte</div>
         </div>
@@ -380,12 +431,16 @@ async function buildPool(){
 
 function renderStageBar(){
   const total = STAGES.reduce((a,b)=>a+b,0);
+  const minPct = 8; // fiecare etapa are minim atat spatiu, ca sa incapa eticheta
+  const remaining = 100 - (minPct * STAGES.length);
+  const widths = STAGES.map(s => minPct + (s/total) * remaining);
+
   const bar = $('trackBar');
   const labels = $('segLabels');
   bar.innerHTML = '';
   labels.innerHTML = '';
   STAGES.forEach((s, i) => {
-    const pct = (s/total*100).toFixed(2);
+    const pct = widths[i].toFixed(2);
     const seg = document.createElement('div');
     seg.className = 'seg';
     seg.style.width = pct + '%';
@@ -420,19 +475,35 @@ function pickSong(){
   return candidate;
 }
 
+function armAudioForRound(track){
+  const audio = $('audio');
+  audio.pause();
+  audio.preload = 'auto';
+  audio.src = track.preview;
+  $('playBtn').disabled = true;
+  $('playBtnLabel').textContent = 'Se încarcă…';
+  audio.load();
+
+  const markReady = () => {
+    $('playBtn').disabled = false;
+    $('playBtnLabel').textContent = 'Redă clipul';
+  };
+  audio.addEventListener('canplaythrough', markReady, { once: true });
+  // plasa de siguranta: unele browsere nu trimit mereu canplaythrough
+  setTimeout(markReady, 3500);
+}
+
 function startRound(){
   current = pickSong();
   stageIndex = 0;
   guessLocked = false;
   selectedSuggestion = null;
-  $('audio').src = current.preview;
-  $('audio').pause();
   $('vinyl').classList.remove('spinning');
+  $('tonearm').classList.remove('down');
   $('searchInput').value = '';
   $('searchInput').disabled = false;
   $('guessBtn').disabled = true;
   $('skipBtn').disabled = false;
-  $('playBtn').disabled = false;
   $('suggestions').style.display = 'none';
   const fb = $('feedback');
   fb.className = 'feedback';
@@ -440,21 +511,27 @@ function startRound(){
   $('nextRow').classList.remove('show');
   $('roundVal').textContent = 'Runda ' + round;
   updateStageBar();
+  armAudioForRound(current);
 }
 
 function playClip(){
   const audio = $('audio');
   clearTimeout(clipTimer);
   audio.currentTime = 0;
-  const playPromise = audio.play();
   $('vinyl').classList.add('spinning');
-  if(playPromise){
-    playPromise.catch(()=>{});
-  }
-  clipTimer = setTimeout(() => {
-    audio.pause();
-    $('vinyl').classList.remove('spinning');
-  }, STAGES[stageIndex]*1000);
+  $('tonearm').classList.add('down');
+
+  const onPlaying = () => {
+    clipTimer = setTimeout(() => {
+      audio.pause();
+      $('vinyl').classList.remove('spinning');
+      $('tonearm').classList.remove('down');
+    }, STAGES[stageIndex] * 1000);
+  };
+  audio.addEventListener('playing', onPlaying, { once: true });
+
+  const playPromise = audio.play();
+  if(playPromise){ playPromise.catch(()=>{}); }
 }
 
 function showSuggestions(query){
@@ -491,6 +568,7 @@ function revealAnswer(correct){
   clearTimeout(clipTimer);
   $('audio').pause();
   $('vinyl').classList.remove('spinning');
+  $('tonearm').classList.remove('down');
   guessLocked = true;
   $('searchInput').disabled = true;
   $('guessBtn').disabled = true;
@@ -500,8 +578,14 @@ function revealAnswer(correct){
   const fb = $('feedback');
   fb.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
   const pointsEarned = correct ? STAGE_POINTS[stageIndex] : 0;
-  if(correct) score += pointsEarned;
-  $('scoreVal').textContent = score;
+  if(correct){
+    score += pointsEarned;
+    const scoreEl = $('scoreVal');
+    scoreEl.textContent = score;
+    scoreEl.classList.remove('pulse');
+    void scoreEl.offsetWidth; // reporneste animatia daca era deja aplicata
+    scoreEl.classList.add('pulse');
+  }
 
   fb.innerHTML = `
     <img src="${current.artwork}" alt="">
